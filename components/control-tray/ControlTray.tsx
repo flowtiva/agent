@@ -1,7 +1,6 @@
 import React, {
   ChangeEvent,
   memo,
-  ReactNode,
   RefObject,
   useCallback,
   useEffect,
@@ -14,29 +13,36 @@ import AudioPulse from "../audio-pulse/AudioPulse";
 import SettingsDialog from "../settings-dialog/SettingsDialog";
 import { useLocalStorageState } from "../../hooks/useLocalStorageState";
 import { audioRecorder } from "../../services/audioRecorder";
+import { NotificationState } from "../../App";
 
 export type ControlTrayProps = {
   videoRef: RefObject<HTMLVideoElement>;
-  children?: ReactNode;
   supportsVideo: boolean;
   onVideoStreamChange?: (stream: MediaStream | null) => void;
   enableEditingSettings?: boolean;
+  theme: 'light' | 'dark';
+  setNotification: (notification: NotificationState) => void;
 };
 
-const MediaStreamButton = memo(
-  ({ isStreaming, onIcon, offIcon, onClick, title }: { isStreaming: boolean; onIcon: string; offIcon: string; onClick: () => void; title: string; }) => (
+const TrayButton = memo(
+  ({ isStreaming, onIcon, offIcon, onClick, title, disabled = false }: { isStreaming: boolean; onIcon: string; offIcon: string; onClick: () => void; title: string; disabled?: boolean }) => (
     <button
-      className={`w-11 h-11 flex items-center justify-center rounded-full transition-colors duration-200 ${isStreaming ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200'}`}
+      className={`w-12 h-12 flex items-center justify-center rounded-full transition-all duration-200 text-2xl
+        ${isStreaming 
+          ? 'bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-primary-hover)]' 
+          : 'bg-[var(--bg-tertiary)] hover:bg-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}
+        disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[var(--bg-tertiary)]`}
       onClick={onClick}
       title={title}
       aria-pressed={isStreaming}
+      disabled={disabled}
     >
-      <span className="material-symbols-outlined filled text-2xl">{isStreaming ? onIcon : offIcon}</span>
+      <span className="material-symbols-outlined filled">{isStreaming ? onIcon : offIcon}</span>
     </button>
   )
 );
 
-function ControlTray({ videoRef, children, onVideoStreamChange = () => {}, supportsVideo, enableEditingSettings }: ControlTrayProps) {
+function ControlTray({ videoRef, onVideoStreamChange = () => {}, supportsVideo, enableEditingSettings, theme, setNotification }: ControlTrayProps) {
   const [activeStreamType, setActiveStreamType] = useState<'webcam' | 'screen' | null>(null);
   const webcam = useMediaStream('webcam');
   const screenCapture = useMediaStream('screen');
@@ -58,18 +64,17 @@ function ControlTray({ videoRef, children, onVideoStreamChange = () => {}, suppo
 
   useEffect(() => {
     const onData = (base64: string) => { client.sendRealtimeInput([{ mimeType: "audio/pcm;rate=16000", data: base64 }]); };
+    const onError = (message: string) => {
+        setNotification({ id: Date.now(), message, type: 'error' });
+    }
+
     if (connected && !muted) {
-      audioRecorder.on("data", onData);
-      audioRecorder.on("volume", setInVolume);
-      audioRecorder.start();
+      audioRecorder.on("data", onData).on("volume", setInVolume).on("error", onError).start();
     } else {
       audioRecorder.stop();
     }
-    return () => {
-      audioRecorder.off("data", onData);
-      audioRecorder.off("volume", setInVolume);
-    };
-  }, [connected, client, muted]);
+    return () => { audioRecorder.off("data", onData).off("volume", setInVolume).off("error", onError); };
+  }, [connected, client, muted, setNotification]);
 
   const handleStreamChange = useCallback(async (type: 'webcam' | 'screen' | null) => {
     webcam.stop();
@@ -110,45 +115,40 @@ function ControlTray({ videoRef, children, onVideoStreamChange = () => {}, suppo
         const data = base64.slice(base64.indexOf(",") + 1);
         client.sendRealtimeInput([{ mimeType: "image/jpeg", data }]);
       }
-      timeoutId = window.setTimeout(sendVideoFrame, 1000 / 0.5); // 0.5 fps
+      timeoutId = window.setTimeout(sendVideoFrame, 1000 / 2); // 2 fps
     }
     
     sendVideoFrame();
     return () => clearTimeout(timeoutId);
   }, [connected, client, videoRef, activeStreamType]);
 
-
   return (
-    <section className="bg-gray-100 dark:bg-slate-800 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex-shrink-0 z-20">
+    <section className="absolute bottom-4 md:bottom-6 inset-x-0 z-20 px-4">
       <canvas style={{ display: "none" }} ref={renderCanvasRef} />
-      <div className="w-full max-w-5xl mx-auto flex items-center gap-4 flex-wrap md:flex-nowrap">
+      <div className="w-full max-w-4xl mx-auto flex items-center gap-2 md:gap-4 p-2 rounded-2xl bg-[var(--bg-primary)] shadow-2xl border border-[var(--border-primary)]">
         
-        <div className="flex items-center gap-3 md:order-1">
-          <button
-            className={`w-12 h-12 flex items-center justify-center rounded-full transition-colors duration-200 ${muted ? "bg-red-500 text-white hover:bg-red-600" : "bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-slate-600"}`}
+        <TrayButton
+            isStreaming={!muted && connected}
             onClick={() => setMuted(!muted)}
+            onIcon="mic"
+            offIcon="mic_off"
             title={muted ? "Unmute microphone" : "Mute microphone"}
-            aria-pressed={!muted}
             disabled={!connected}
-          >
-            <span className="material-symbols-outlined filled text-2xl">{muted ? "mic_off" : "mic"}</span>
-          </button>
-          {children}
-        </div>
+          />
 
-        <div className="flex-grow flex items-center relative w-full md:w-auto md:order-2">
+        <div className="flex-grow flex items-center relative">
           <textarea
-            className="w-full bg-gray-200 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-full py-3 pl-5 pr-14 text-base text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full bg-[var(--bg-tertiary)] border-2 border-transparent rounded-full py-3 pl-5 pr-14 text-base text-[var(--text-primary)] placeholder-[var(--text-tertiary)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)]"
             ref={inputRef}
             disabled={!connected}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
             onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setTextInput(e.target.value)}
             value={textInput}
-            placeholder={connected ? "Type something..." : "Connect to start conversation"}
+            placeholder={connected ? "Type or talk..." : "Press play to start"}
             rows={1}
           />
           <button
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-slate-500 disabled:cursor-not-allowed text-white rounded-full transition-colors"
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] disabled:bg-[var(--bg-tertiary)] disabled:text-[var(--text-tertiary)] disabled:cursor-not-allowed text-white rounded-full transition-colors"
             onClick={handleSubmit}
             disabled={!connected || !textInput.trim()}
             aria-label="Send message"
@@ -157,19 +157,16 @@ function ControlTray({ videoRef, children, onVideoStreamChange = () => {}, suppo
           </button>
         </div>
         
-        <div className="flex items-center gap-3 md:order-3">
-          <div className="w-11 h-11 flex items-center justify-center border border-gray-300 dark:border-slate-600 rounded-full" title="Output volume">
-             <AudioPulse volume={volume} active={connected} />
-          </div>
+        <div className="flex items-center gap-2">
           {supportsVideo && (
             <>
-              <MediaStreamButton isStreaming={screenCapture.isStreaming} onClick={() => handleStreamChange(screenCapture.isStreaming ? null : 'screen')} onIcon="stop_screen_share" offIcon="screen_share" title={screenCapture.isStreaming ? "Stop screen share" : "Share screen"} />
-              <MediaStreamButton isStreaming={webcam.isStreaming} onClick={() => handleStreamChange(webcam.isStreaming ? null : 'webcam')} onIcon="videocam_off" offIcon="videocam" title={webcam.isStreaming ? "Turn off camera" : "Turn on camera"} />
+              <TrayButton isStreaming={screenCapture.isStreaming} onClick={() => handleStreamChange(screenCapture.isStreaming ? null : 'screen')} onIcon="stop_screen_share" offIcon="screen_share" title={screenCapture.isStreaming ? "Stop screen share" : "Share screen"} disabled={!connected} />
+              <TrayButton isStreaming={webcam.isStreaming} onClick={() => handleStreamChange(webcam.isStreaming ? null : 'webcam')} onIcon="videocam_off" offIcon="videocam" title={webcam.isStreaming ? "Turn off camera" : "Turn on camera"} disabled={!connected}/>
             </>
           )}
-          {enableEditingSettings && <SettingsDialog />}
+          {enableEditingSettings && <SettingsDialog theme={theme} />}
            <button
-             className={`w-12 h-12 flex items-center justify-center rounded-full text-white font-semibold transition-colors duration-200 ${connected ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}
+             className={`w-14 h-12 flex items-center justify-center rounded-full text-white font-semibold transition-colors duration-200 ${connected ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}
              onClick={connected ? disconnect : connect}
              title={connected ? "Disconnect" : "Connect"}
            >
@@ -178,6 +175,9 @@ function ControlTray({ videoRef, children, onVideoStreamChange = () => {}, suppo
              </span>
            </button>
         </div>
+      </div>
+      <div className="absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+8px)] w-12 h-12 flex items-center justify-center" title="Output volume">
+        <AudioPulse volume={volume} active={connected} />
       </div>
     </section>
   );

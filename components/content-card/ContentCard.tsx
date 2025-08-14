@@ -15,26 +15,37 @@ export function ContentCard({
   onClose,
 }: ContentCardProps) {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-2xl max-w-md w-full overflow-hidden relative flex flex-col animate-in fade-in zoom-in-95 duration-300">
-      <button
-        onClick={onClose}
-        className="absolute top-2 right-2 bg-black/30 hover:bg-black/50 text-white rounded-full p-1 z-10 transition-colors"
-        aria-label="Close content"
-      >
-        <span className="material-symbols-outlined text-lg">close</span>
-      </button>
+    <div className="bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-primary)] shadow-2xl max-w-lg w-full overflow-hidden relative flex flex-col animate-in fade-in zoom-in-95 duration-300">
       {imageUrl && (
-        <img
-          src={imageUrl}
-          alt={title || "Displayed content"}
-          className="w-full h-48 object-cover"
-        />
+        <div className="relative">
+          <img
+            src={imageUrl}
+            alt={title || "Displayed content"}
+            className="w-full h-56 object-cover"
+          />
+           <button
+            onClick={onClose}
+            className="absolute top-3 right-3 bg-black/40 hover:bg-black/60 text-white rounded-full p-1.5 z-10 transition-colors flex items-center justify-center"
+            aria-label="Close content"
+          >
+            <span className="material-symbols-outlined text-xl">close</span>
+          </button>
+        </div>
       )}
-      <div className="p-6">
-        {title && <h2 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">{title}</h2>}
-        <p className="whitespace-pre-wrap text-gray-600 dark:text-gray-300 leading-relaxed">
+      <div className="p-6 flex-grow">
+        {!imageUrl && (
+            <button
+            onClick={onClose}
+            className="absolute top-3 right-3 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded-full p-1.5 z-10 transition-colors flex items-center justify-center"
+            aria-label="Close content"
+          >
+            <span className="material-symbols-outlined text-xl">close</span>
+          </button>
+        )}
+        {title && <h2 className="mb-2 text-2xl font-bold text-[var(--text-primary)]">{title}</h2>}
+        <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-[var(--text-secondary)] leading-relaxed">
           {content}
-        </p>
+        </div>
       </div>
     </div>
   );

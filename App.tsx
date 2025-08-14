@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { RiMenuLine } from 'react-icons/ri';
 import { Altair } from './components/altair/Altair';
@@ -7,6 +6,11 @@ import SidePanel from './components/side-panel/SidePanel';
 import { LiveAPIProvider } from './contexts/LiveAPIContext';
 import { useLocalStorageState } from './hooks/useLocalStorageState';
 import { LiveClientOptions } from './types';
+import { Notification } from './components/notification/Notification';
+
+type NotificationType = 'info' | 'success' | 'warning' | 'error';
+export type NotificationState = { id: number; message: string; type: NotificationType } | null;
+
 
 const apiOptions: LiveClientOptions = {
   apiKey: process.env.API_KEY as string,
@@ -27,10 +31,11 @@ function App() {
     'theme',
     'dark'
   );
-  const [mainBackground, setMainBackground] = useLocalStorageState<string>(
-    'mainBackground',
-    '#111827' // bg-gray-900
+  const [videoShape, setVideoShape] = useLocalStorageState<'rectangle' | 'circle'>(
+    'videoShape',
+    'rectangle'
   );
+  const [notification, setNotification] = useState<NotificationState>(null);
 
   useEffect(() => {
     document.documentElement.classList.remove('light', 'dark');
@@ -40,25 +45,27 @@ function App() {
   const isVideoHidden = !videoStream || !isVideoVisible;
 
   return (
-    <div className="h-screen w-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
+    <div className="h-screen w-screen bg-[var(--bg-primary)] text-[var(--text-primary)] overflow-hidden">
+      {notification && <Notification {...notification} onClose={() => setNotification(null)} />}
       <LiveAPIProvider options={apiOptions}>
         <div className="flex h-full relative">
-          <SidePanel open={isPanelOpen} setOpen={setIsPanelOpen} />
+          <SidePanel open={isPanelOpen} setOpen={setIsPanelOpen} theme={theme} />
           <main 
-            style={{ backgroundColor: mainBackground }}
+            style={{ backgroundColor: 'var(--main-content-bg)' }}
             className="flex-1 flex flex-col relative h-full min-w-0 transition-colors duration-500 ease-in-out"
           >
-            <header className="flex items-center px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-800 flex-shrink-0">
+            <header className="flex items-center px-4 md:px-6 py-3 border-b border-[var(--border-primary)] bg-[var(--bg-primary)] flex-shrink-0 z-20">
               <button
-                className="lg:hidden p-2 -ml-2 mr-2 text-gray-500 dark:text-gray-400"
+                className="lg:hidden p-2 -ml-2 mr-2 text-[var(--text-secondary)]"
                 onClick={() => setIsPanelOpen(true)}
                 aria-label="Open console"
               >
                 <RiMenuLine size={24} />
               </button>
-              <h1 className="text-lg font-medium flex-grow text-center text-gray-800 dark:text-gray-200">
+              <h1 className="text-lg font-bold flex-grow lg:text-center text-left text-[var(--text-primary)]">
                 Baste
               </h1>
+               <div className="w-10 h-10 lg:hidden" />
             </header>
 
             <div className="flex-grow flex justify-center items-center p-4 overflow-auto relative">
@@ -66,10 +73,14 @@ function App() {
                 setIsPanelOpen={setIsPanelOpen}
                 setIsVideoVisible={setIsVideoVisible}
                 setTheme={setTheme}
-                setMainBackground={setMainBackground}
+                setVideoShape={setVideoShape}
+                theme={theme}
+                setNotification={setNotification}
               />
                <video
-                className={`absolute bottom-32 right-5 w-48 max-w-[30vw] rounded-lg border-2 border-gray-400 dark:border-gray-600 shadow-2xl transition-all duration-300 ease-out z-10 ${isVideoHidden ? 'opacity-0 pointer-events-none translate-x-[calc(100%+40px)]' : 'opacity-100 translate-x-0'}`}
+                className={`absolute bottom-28 right-6 max-w-[25vw] border-2 border-[var(--border-secondary)] shadow-2xl transition-all duration-300 ease-out z-10 bg-black
+                  ${isVideoHidden ? 'opacity-0 pointer-events-none translate-x-[calc(100%+40px)]' : 'opacity-100 translate-x-0'} 
+                  ${videoShape === 'circle' ? 'w-40 h-40 md:w-48 md:h-48 rounded-full object-cover' : 'w-64 rounded-lg'}`}
                 ref={videoRef}
                 autoPlay
                 playsInline
@@ -82,6 +93,8 @@ function App() {
               supportsVideo={true}
               onVideoStreamChange={setVideoStream}
               enableEditingSettings={true}
+              theme={theme}
+              setNotification={setNotification}
             />
           </main>
         </div>

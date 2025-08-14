@@ -1,5 +1,5 @@
 {
-  "name": "Multimodal Live Agent Console",
+  "name": "baste",
   "description": "A professional web console for interacting with the Gemini Live API, featuring real-time audio/video streaming, tool usage, and a developer log.",
   "requestFramePermissions": [
     "camera",

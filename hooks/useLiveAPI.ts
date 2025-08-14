@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LiveConnectConfig } from "@google/genai";
 import { GenAILiveClient } from "../services/genaiLiveClient";
@@ -24,7 +25,7 @@ export type UseLiveAPIResults = {
 export function useLiveAPI(options: LiveClientOptions): UseLiveAPIResults {
   const client = useMemo(() => new GenAILiveClient(options), [options]);
   const audioStreamerRef = useRef<AudioStreamer | null>(null);
-  const [model, setModel] = useState<string>("gemini-2.5-flash-preview-native-audio-dialog");
+  const [model, setModel] = useState<string>("models/gemini-2.5-flash-preview-native-audio-dialog");
   const [config, setConfig] = useLocalStorageState<LiveConnectConfig>("liveConfig", {});
   const [connected, setConnected] = useState(false);
   const [volume, setVolume] = useState(0);
@@ -50,34 +51,26 @@ export function useLiveAPI(options: LiveClientOptions): UseLiveAPIResults {
     const onError = (error: ErrorEvent) => { console.error("error", error); setIsThinking(false); };
     const stopThinking = () => setIsThinking(false);
     const stopAudioStreamer = () => audioStreamerRef.current?.stop();
+    const completeAudioStreamer = () => audioStreamerRef.current?.complete();
     const onAudio = (data: ArrayBuffer) => { stopThinking(); audioStreamerRef.current?.addPCM16(new Uint8Array(data)); };
     
-    client.on("open", onOpen);
-    client.on("close", onClose);
-    client.on("error", onError);
-    client.on("audio", onAudio);
-    client.on("interrupted", stopAudioStreamer);
-    client.on("content", stopThinking);
-    client.on("toolcall", stopThinking);
-    client.on("toolcallcancellation", stopThinking);
-    client.on("turncomplete", stopThinking);
+    client.on("open", onOpen).on("close", onClose).on("error", onError)
+          .on("audio", onAudio).on("interrupted", stopAudioStreamer)
+          .on("content", stopThinking).on("toolcall", stopThinking)
+          .on("toolcallcancellation", stopThinking).on("turncomplete", completeAudioStreamer);
           
     return () => {
-      client.off("open", onOpen);
-      client.off("close", onClose);
-      client.off("error", onError);
-      client.off("audio", onAudio);
-      client.off("interrupted", stopAudioStreamer);
-      client.off("content", stopThinking);
-      client.off("toolcall", stopThinking);
-      client.off("toolcallcancellation", stopThinking);
-      client.off("turncomplete", stopThinking);
-      client.disconnect();
+      client.off("open", onOpen).off("close", onClose).off("error", onError)
+            .off("audio", onAudio).off("interrupted", stopAudioStreamer)
+            .off("content", stopThinking).off("toolcall", stopThinking)
+            .off("toolcallcancellation", stopThinking).off("turncomplete", completeAudioStreamer)
+            .disconnect();
     };
   }, [client]);
 
   const connect = useCallback(async () => {
     if (!config) throw new Error("config has not been set");
+    await audioStreamerRef.current?.resume();
     client.disconnect();
     await client.connect(model, config);
   }, [client, config, model]);

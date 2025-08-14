@@ -1,3 +1,4 @@
+
 import {
   Content,
   GoogleGenAI,
@@ -30,16 +31,27 @@ export interface LiveClientEventTypes {
 }
 
 export class GenAILiveClient {
+  private emitter = new EventEmitter<LiveClientEventTypes>();
   protected client: GoogleGenAI;
   private _session: Session | null = null;
   private _status: "connected" | "disconnected" | "connecting" = "disconnected";
-  private emitter = new EventEmitter<LiveClientEventTypes>();
-
-  public on = this.emitter.on.bind(this.emitter);
-  public off = this.emitter.off.bind(this.emitter);
-
+  
   constructor(options: LiveClientOptions) {
     this.client = new GoogleGenAI(options);
+  }
+
+  public on<T extends keyof LiveClientEventTypes>(event: T, listener: LiveClientEventTypes[T]): this {
+    this.emitter.on(event, listener as any);
+    return this;
+  }
+
+  public off<T extends keyof LiveClientEventTypes>(event: T, listener: LiveClientEventTypes[T]): this {
+    this.emitter.off(event, listener as any);
+    return this;
+  }
+
+  private emit<T extends keyof LiveClientEventTypes>(event: T, ...args: Parameters<LiveClientEventTypes[T]>): boolean {
+    return (this.emitter.emit as any)(event, ...args);
   }
 
   public get status() {
@@ -47,7 +59,7 @@ export class GenAILiveClient {
   }
 
   private log(type: string, message: StreamingLog["message"]) {
-    this.emitter.emit("log", { date: new Date(), type, message });
+    this.emit("log", { date: new Date(), type, message });
   }
 
   async connect(model: string, config: LiveConnectConfig): Promise<boolean> {
@@ -58,17 +70,17 @@ export class GenAILiveClient {
       onopen: () => {
         this._status = "connected";
         this.log("client.open", "Connected");
-        this.emitter.emit("open");
+        this.emit("open");
       },
       onmessage: (message: LiveServerMessage) => this.onMessage(message),
       onerror: (e: ErrorEvent) => {
         this.log("server.error", e.message);
-        this.emitter.emit("error", e);
+        this.emit("error", e);
       },
       onclose: (e: CloseEvent) => {
         this._status = "disconnected";
         this.log("server.close", `Disconnected: ${e.reason || 'No reason given'}`);
-        this.emitter.emit("close", e);
+        this.emit("close", e);
       },
     };
 
@@ -94,13 +106,13 @@ export class GenAILiveClient {
   private onMessage(message: LiveServerMessage) {
     if (message.setupComplete) {
         this.log("server.setupComplete", message);
-        this.emitter.emit("setupcomplete");
+        this.emit("setupcomplete");
     } else if (message.toolCall) {
         this.log("server.toolCall", { toolCall: message.toolCall });
-        this.emitter.emit("toolcall", message.toolCall);
+        this.emit("toolcall", message.toolCall);
     } else if (message.toolCallCancellation) {
         this.log("server.toolCallCancellation", { toolCallCancellation: message.toolCallCancellation });
-        this.emitter.emit("toolcallcancellation", message.toolCallCancellation);
+        this.emit("toolcallcancellation", message.toolCallCancellation);
     } else if (message.serverContent) {
         this.handleServerContent(message.serverContent);
     } else {
@@ -112,12 +124,12 @@ export class GenAILiveClient {
   private handleServerContent(serverContent: LiveServerContent) {
     if ("interrupted" in serverContent) {
         this.log("server.content", "interrupted");
-        this.emitter.emit("interrupted");
+        this.emit("interrupted");
         return;
     }
     if ("turnComplete" in serverContent) {
         this.log("server.content", "turnComplete");
-        this.emitter.emit("turncomplete");
+        this.emit("turncomplete");
     }
 
     if ("modelTurn" in serverContent && serverContent.modelTurn) {
@@ -128,7 +140,7 @@ export class GenAILiveClient {
         audioParts.forEach(p => {
             if (p.inlineData?.data) {
                 const data = base64ToArrayBuffer(p.inlineData.data);
-                this.emitter.emit("audio", data);
+                this.emit("audio", data);
                 this.log("server.audio", `buffer (${data.byteLength})`);
             }
         });
@@ -140,34 +152,41 @@ export class GenAILiveClient {
             if ((serverContent as any).groundingMetadata) {
                 (contentToEmit as any).groundingMetadata = (serverContent as any).groundingMetadata;
             }
-            this.emitter.emit("content", contentToEmit);
+            this.emit("content", contentToEmit);
             this.log("server.content", { serverContent: contentToEmit });
         }
     } else if ((serverContent as any).groundingMetadata) {
-        this.emitter.emit("content", serverContent);
+        this.emit("content", serverContent);
         this.log("server.content", { serverContent });
     }
   }
   
   sendRealtimeInput(media: Array<{ mimeType: string; data: string }>) {
     if (this._status !== "connected") return;
-    const parts = media.map(m => ({
-        inlineData: { mimeType: m.mimeType, data: m.data }
+    const turns: Part[] = media.map((m) => ({
+      inlineData: {
+        mimeType: m.mimeType,
+        data: m.data,
+      },
     }));
-    this._session?.sendRealtimeInput({ parts });
+    this._session?.sendClientContent({ turns, turnComplete: false });
     this.log("client.realtimeInput", media.map(m => m.mimeType).join(', '));
   }
 
   sendToolResponse(toolResponse: LiveClientToolResponse) {
-    if (this._status !== "connected" || !toolResponse.functionResponses) return;
-    this._session?.sendToolResponse({ functionResponses: toolResponse.functionResponses });
+    if (this._status !== "connected") return;
+    if (toolResponse.functionResponses) {
+      this._session?.sendToolResponse({
+        functionResponses: toolResponse.functionResponses,
+      });
+    }
     this.log("client.toolResponse", toolResponse);
   }
 
   send(parts: Part | Part[], turnComplete: boolean = true) {
     if (this._status !== "connected") return;
     const turns = Array.isArray(parts) ? parts : [parts];
-    this._session?.sendClientContent({ turns: [{ parts: turns }], turnComplete });
+    this._session?.sendClientContent({ turns, turnComplete });
     this.log("client.send", { turns, turnComplete });
   }
 }

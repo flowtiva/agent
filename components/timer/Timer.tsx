@@ -37,24 +37,24 @@ export function Timer({ duration, title, onFinish }: TimerProps) {
   const seconds = remaining % 60;
 
   return (
-    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-2xl flex flex-col items-center gap-4 w-72 max-w-full animate-in fade-in zoom-in-95 duration-300 relative">
+    <div className="bg-[var(--bg-secondary)] p-8 rounded-2xl border border-[var(--border-primary)] shadow-2xl flex flex-col items-center gap-6 w-80 max-w-full animate-in fade-in zoom-in-95 duration-300 relative">
       <button
         onClick={onFinish}
-        className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+        className="absolute top-3 right-3 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
         aria-label="Close timer"
       >
         <span className="material-symbols-outlined">close</span>
       </button>
 
-      {title && <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>}
+      {title && <h3 className="text-xl font-semibold text-[var(--text-primary)]">{title}</h3>}
       
-      <div className="font-mono text-5xl font-bold text-blue-600 dark:text-blue-400">
+      <div className="font-mono text-6xl font-bold text-[var(--text-accent)] tabular-nums">
         {minutes.toString().padStart(2, "0")}:{seconds.toString().padStart(2, "0")}
       </div>
       
-      <div className="w-full h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
+      <div className="w-full h-2.5 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
         <div 
-          className="h-full bg-blue-600 dark:bg-blue-500 rounded-full transition-all duration-1000 linear" 
+          className="h-full bg-[var(--accent-primary)] rounded-full transition-all duration-1000 linear" 
           style={{ width: `${progress}%` }} 
         />
       </div>
